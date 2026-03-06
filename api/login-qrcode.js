@@ -53,6 +53,7 @@ export default async function handler(req, res) {
     }
 
     const err = await wxRes.json().catch(() => ({}));
+    console.error('[login-qrcode] 微信接口非图片:', err);
     if (isTokenError(err)) {
       clearAccessTokenCache();
       accessToken = await getCachedAccessToken(false);
@@ -66,11 +67,13 @@ export default async function handler(req, res) {
         return;
       }
       const err2 = await wxRes.json().catch(() => ({}));
+      console.error('[login-qrcode] 重试后仍失败:', err2);
       res.status(500).json({ ok: false, message: err2.errmsg || err.errmsg || '生成二维码失败' });
       return;
     }
     res.status(500).json({ ok: false, message: err.errmsg || '生成二维码失败' });
   } catch (e) {
+    console.error('[login-qrcode] 异常:', e.message, e.stack);
     res.status(500).json({ ok: false, message: e.message || '服务错误' });
   }
 }
