@@ -3,7 +3,7 @@
  * GET /api/login-qrcode?ticket=xxx
  * 注意：WX_APPID / WX_SECRET 必须是「小程序」的，不能是公众号的。
  */
-import { getAccessToken, getCachedAccessToken, clearAccessTokenCache } from './_cloud.mjs';
+import { getCachedAccessToken, clearAccessTokenCache } from './_cloud.mjs';
 
 function isTokenError(err) {
   if (!err || typeof err !== 'object') return false;
@@ -39,13 +39,8 @@ export default async function handler(req, res) {
     return;
   }
   try {
-    // 优先用 force_refresh 拿「当前最新」token，避免多实例导致「not latest」（每日限 20 次，间隔 30 秒）
-    let accessToken;
-    try {
-      accessToken = await getAccessToken(true);
-    } catch (e) {
-      accessToken = await getAccessToken(false);
-    }
+    // 不使用 force_refresh：避免让其它实例的 token 立刻变成「not latest」
+    let accessToken = await getCachedAccessToken(false);
     let wxRes = await requestWxacode(accessToken, ticket);
     const contentType = wxRes.headers.get('content-type') || '';
 
@@ -60,11 +55,7 @@ export default async function handler(req, res) {
     const err = await wxRes.json().catch(() => ({}));
     if (isTokenError(err)) {
       clearAccessTokenCache();
-      try {
-        accessToken = await getCachedAccessToken(true);
-      } catch (_) {
-        accessToken = await getCachedAccessToken(false);
-      }
+      accessToken = await getCachedAccessToken(false);
       wxRes = await requestWxacode(accessToken, ticket);
       const ct2 = wxRes.headers.get('content-type') || '';
       if (ct2.indexOf('image') >= 0) {
