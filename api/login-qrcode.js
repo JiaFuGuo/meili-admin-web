@@ -39,8 +39,13 @@ export default async function handler(req, res) {
     return;
   }
   try {
-    // 生成小程序码时每次直接拉取新 token，不用缓存，避免多实例下「不是最新」报错
-    let accessToken = await getAccessToken();
+    // 优先用 force_refresh 拿「当前最新」token，避免多实例导致「not latest」（每日限 20 次，间隔 30 秒）
+    let accessToken;
+    try {
+      accessToken = await getAccessToken(true);
+    } catch (e) {
+      accessToken = await getAccessToken(false);
+    }
     let wxRes = await requestWxacode(accessToken, ticket);
     const contentType = wxRes.headers.get('content-type') || '';
 
@@ -55,7 +60,11 @@ export default async function handler(req, res) {
     const err = await wxRes.json().catch(() => ({}));
     if (isTokenError(err)) {
       clearAccessTokenCache();
-      accessToken = await getCachedAccessToken(true);
+      try {
+        accessToken = await getCachedAccessToken(true);
+      } catch (_) {
+        accessToken = await getCachedAccessToken(false);
+      }
       wxRes = await requestWxacode(accessToken, ticket);
       const ct2 = wxRes.headers.get('content-type') || '';
       if (ct2.indexOf('image') >= 0) {
