@@ -20,7 +20,9 @@ export default async function handler(req, res) {
     const body = JSON.stringify({
       scene: ticket,
       page: 'pages/web-login/index',
-      width: 280
+      width: 280,
+      check_path: false,
+      env_version: 'trial'
     });
     const wxRes = await fetch(url, {
       method: 'POST',
