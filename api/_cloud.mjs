@@ -1,12 +1,20 @@
 const env = (process.env.WX_CLOUD_ENV || '').trim();
 let cached = { token: '', expires: 0 };
 
+/** 使用稳定版接口获取 access_token（推荐，避免 invalid credential） */
 export async function getAccessToken() {
-  const appid = process.env.WX_APPID || '';
-  const secret = process.env.WX_SECRET || '';
+  const appid = (process.env.WX_APPID || '').trim();
+  const secret = (process.env.WX_SECRET || '').trim();
   if (!appid || !secret) throw new Error('未配置 WX_APPID / WX_SECRET');
-  const url = `https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=${encodeURIComponent(appid)}&secret=${encodeURIComponent(secret)}`;
-  const res = await fetch(url);
+  const res = await fetch('https://api.weixin.qq.com/cgi-bin/stable_token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      grant_type: 'client_credential',
+      appid,
+      secret
+    })
+  });
   const data = await res.json();
   if (data.access_token) return data.access_token;
   throw new Error(data.errmsg || '获取 access_token 失败');
