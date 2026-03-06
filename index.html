@@ -192,14 +192,41 @@
         var qrWrap = document.createElement('div');
         qrWrap.className = 'qrcode-wrap';
         var img = document.createElement('img');
-        img.src = API + '/login-qrcode?ticket=' + encodeURIComponent(state.ticket);
         img.alt = '扫码登录';
+        img.style.display = 'none';
         qrWrap.appendChild(img);
+        var qrErr = document.createElement('div');
+        qrErr.className = 'msg err';
+        qrErr.style.display = 'none';
+        qrWrap.appendChild(qrErr);
         var hint2 = document.createElement('div');
         hint2.className = 'hint';
         hint2.textContent = '请用微信打开「美丽人生」小程序，扫描上方二维码登录（需管理员身份）';
         qrWrap.appendChild(hint2);
         box.appendChild(qrWrap);
+        fetch(API + '/login-qrcode?ticket=' + encodeURIComponent(state.ticket))
+          .then(function(r) {
+            var ct = (r.headers.get('content-type') || '').toLowerCase();
+            if (r.ok && (ct.indexOf('image/') === 0 || ct.indexOf('image') >= 0)) {
+              return r.blob().then(function(blob) {
+                img.src = URL.createObjectURL(blob);
+                img.style.display = 'block';
+                qrErr.style.display = 'none';
+              });
+            }
+            return r.json().then(function(d) {
+              qrErr.textContent = d.message || '二维码生成失败';
+              qrErr.style.display = 'block';
+              img.style.display = 'none';
+            }).catch(function() {
+              qrErr.textContent = '二维码加载失败';
+              qrErr.style.display = 'block';
+            });
+          })
+          .catch(function(e) {
+            qrErr.textContent = e.message || '网络错误';
+            qrErr.style.display = 'block';
+          });
       } else if (state.expired) {
         var expWrap = document.createElement('div');
         expWrap.className = 'qrcode-wrap';
