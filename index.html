@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>美丽人生 · 管理后台</title>
+  <style>
+    :root {
+      --bg: #0f0f12;
+      --card: #1a1a1f;
+      --border: #2d2d35;
+      --text: #e4e4e7;
+      --muted: #a1a1aa;
+      --primary: #f9a8d4;
+      --primary-dark: #db2777;
+      --success: #34d399;
+      --danger: #f87171;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "DM Sans", "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+    .container { max-width: 900px; margin: 0 auto; padding: 24px; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    .section-title { font-weight: 600; margin-bottom: 12px; color: var(--text); }
+    .tabs { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+    .tab {
+      padding: 10px 18px;
+      border-radius: 8px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .tab:hover { color: var(--text); }
+    .tab.active { background: var(--primary-dark); color: #fff; border-color: var(--primary-dark); }
+    .field-label { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+    input, select, button {
+      font: inherit;
+      padding: 10px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      width: 100%;
+      margin-bottom: 12px;
+    }
+    button {
+      cursor: pointer;
+      width: auto;
+      min-width: 80px;
+      margin-right: 8px;
+      margin-bottom: 0;
+    }
+    button.primary { background: var(--primary-dark); color: #fff; border: none; }
+    button.primary:disabled { opacity: 0.6; cursor: not-allowed; }
+    button.approve { background: var(--success); color: #111; border: none; }
+    button.reject { background: var(--danger); color: #fff; border: none; }
+    button.small { padding: 6px 12px; font-size: 12px; }
+    .login-wrap {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .login-box {
+      width: 100%;
+      max-width: 360px;
+      padding: 32px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+    }
+    .login-box h1 { margin: 0 0 24px; font-size: 20px; text-align: center; }
+    .msg { padding: 10px; border-radius: 8px; margin-bottom: 12px; font-size: 14px; }
+    .msg.err { background: rgba(248,113,113,0.15); color: var(--danger); }
+    .msg.ok { background: rgba(52,211,153,0.15); color: var(--success); }
+    .item { padding: 14px 0; border-bottom: 1px solid var(--border); }
+    .item:last-child { border-bottom: none; }
+    .item-row { font-size: 14px; margin-bottom: 4px; }
+    .item-meta { font-size: 12px; color: var(--muted); }
+    .item-actions { margin-top: 10px; }
+    .empty { color: var(--muted); font-size: 14px; padding: 20px 0; text-align: center; }
+    .user-item { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+    .user-item .info { flex: 1; min-width: 0; }
+    .user-item .role-tag { font-size: 11px; padding: 2px 8px; background: var(--border); border-radius: 6px; margin-left: 8px; }
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
+    .header h1 { margin: 0; font-size: 18px; }
+    .logout { font-size: 13px; color: var(--muted); cursor: pointer; }
+    .logout:hover { color: var(--primary); }
+    .qrcode-wrap { text-align: center; padding: 24px 0; }
+    .qrcode-wrap img { width: 220px; height: 220px; display: block; margin: 0 auto 16px; }
+    .qrcode-wrap .hint { font-size: 14px; color: var(--muted); }
+    .qrcode-wrap .expired { color: var(--danger); margin-top: 12px; }
+    .qrcode-wrap .refresh { margin-top: 12px; font-size: 14px; color: var(--primary); cursor: pointer; }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script>
+    // 默认走 Vercel 同域 /api（无需 CORS/安全域名）。
+    // 若你把 BFF 部署在其它域名，可设置 window.ADMIN_WEB_API_BASE 为完整地址（例如 https://xxx.vercel.app/api）
+    window.ADMIN_WEB_API_BASE = window.ADMIN_WEB_API_BASE || '';
+    var API = window.ADMIN_WEB_API_BASE || '/api';
+    var TOKEN_KEY = 'meili_admin_token';
+
+    function getToken() { return localStorage.getItem(TOKEN_KEY); }
+    function setToken(t) { localStorage.setItem(TOKEN_KEY, t); }
+    function clearToken() { localStorage.removeItem(TOKEN_KEY); }
+
+    function apiCall(fn, data) {
+      var token = getToken();
+      if (!token) return Promise.reject(new Error('请先登录'));
+      return fetch(API + '/call', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ fn: fn, data: data })
+      }).then(function(r) { return r.json(); }).then(function(json) {
+        if (json.ok === false) throw new Error(json.message || '请求失败');
+        return json;
+      });
+    }
+
+    var IDENTITY_OPTIONS = [
+      { value: '', label: '全部身份' },
+      { value: 'doctor', label: '医生' },
+      { value: 'nurse', label: '护士' },
+      { value: 'patient', label: '患者' },
+      { value: 'family', label: '家属' },
+      { value: 'other', label: '其他' }
+    ];
+
+    var state = {
+      ticket: '',
+      loading: true,
+      expired: false,
+      err: '',
+      tab: 'users',
+      userList: [],
+      requestList: [],
+      clueList: [],
+      blacklistList: [],
+      keyword: '',
+      identityFilter: '',
+      loadingUsers: false,
+      toast: ''
+    };
+    var pollTimer = null;
+
+    function showToast(text) {
+      state.toast = text;
+      renderApp();
+      setTimeout(function() { state.toast = ''; renderApp(); }, 2000);
+    }
+
+    function renderLogin() {
+      var wrap = document.createElement('div');
+      wrap.className = 'login-wrap';
+      var box = document.createElement('div');
+      box.className = 'login-box';
+      var h1 = document.createElement('h1');
+      h1.textContent = '美丽人生 · 管理后台';
+      box.appendChild(h1);
+      if (state.err) {
+        var errDiv = document.createElement('div');
+        errDiv.className = 'msg err';
+        errDiv.textContent = state.err;
+        box.appendChild(errDiv);
+      }
+      if (state.loading) {
+        var loadingWrap = document.createElement('div');
+        loadingWrap.className = 'qrcode-wrap';
+        var hint = document.createElement('div');
+        hint.className = 'hint';
+        hint.textContent = '正在生成二维码…';
+        loadingWrap.appendChild(hint);
+        box.appendChild(loadingWrap);
+      } else if (state.ticket && !state.expired) {
+        var qrWrap = document.createElement('div');
+        qrWrap.className = 'qrcode-wrap';
+        var img = document.createElement('img');
+        img.src = API + '/login-qrcode?ticket=' + encodeURIComponent(state.ticket);
+        img.alt = '扫码登录';
+        qrWrap.appendChild(img);
+        var hint2 = document.createElement('div');
+        hint2.className = 'hint';
+        hint2.textContent = '请用微信打开「美丽人生」小程序，扫描上方二维码登录（需管理员身份）';
+        qrWrap.appendChild(hint2);
+        box.appendChild(qrWrap);
+      } else if (state.expired) {
+        var expWrap = document.createElement('div');
+        expWrap.className = 'qrcode-wrap';
+        var expText = document.createElement('div');
+        expText.className = 'expired';
+        expText.textContent = '二维码已过期';
+        expWrap.appendChild(expText);
+        var refreshBtn = document.createElement('div');
+        refreshBtn.className = 'refresh';
+        refreshBtn.textContent = '点击刷新';
+        refreshBtn.onclick = fetchTicket;
+        expWrap.appendChild(refreshBtn);
+        box.appendChild(expWrap);
+      }
+      wrap.appendChild(box);
+      return wrap;
+    }
+
+    function fetchTicket() {
+      state.expired = false;
+      state.err = '';
+      state.loading = true;
+      renderApp();
+      fetch(API + '/login-ticket').then(function(r) { return r.json(); }).then(function(d) {
+        if (d.ok && d.ticket) {
+          state.ticket = d.ticket;
+          state.loading = false;
+          renderApp();
+          if (pollTimer) clearInterval(pollTimer);
+          pollTimer = setInterval(function() {
+            fetch(API + '/login-poll?ticket=' + encodeURIComponent(state.ticket)).then(function(r) { return r.json(); }).then(function(d2) {
+              if (d2.ok && d2.token) {
+                clearInterval(pollTimer);
+                pollTimer = null;
+                setToken(d2.token);
+                renderApp();
+              } else if (d2.status === 'expired') {
+                clearInterval(pollTimer);
+                pollTimer = null;
+                state.expired = true;
+                renderApp();
+              }
+            });
+          }, 2000);
+        } else {
+          state.err = d.message || '获取二维码失败';
+          state.loading = false;
+          renderApp();
+        }
+      }).catch(function(e) {
+        state.err = e.message || '网络错误';
+        state.loading = false;
+        renderApp();
+      });
+    }
+
+    function loadUsers() {
+      state.loadingUsers = true;
+      renderApp();
+      apiCall('admin', { action: 'getUsers', keyword: state.keyword, identity: state.identityFilter })
+        .then(function(d) { state.userList = d.list || []; state.loadingUsers = false; renderApp(); })
+        .catch(function(e) { state.loadingUsers = false; showToast(e.message); });
+    }
+    function loadRequests() {
+      apiCall('admin', { action: 'getIdentityChangeRequests', status: 'pending' })
+        .then(function(d) { state.requestList = d.list || []; renderApp(); }).catch(function() {});
+    }
+    function loadClues() {
+      apiCall('admin', { action: 'getClues', status: 'pending' })
+        .then(function(d) { state.clueList = d.list || []; renderApp(); }).catch(function() {});
+    }
+    function loadBlacklist() {
+      apiCall('admin', { action: 'getBlacklistRecords' })
+        .then(function(d) { state.blacklistList = d.list || []; renderApp(); }).catch(function() {});
+    }
+
+    function reviewRequest(id, action) {
+      apiCall('admin', { action: 'reviewIdentityChange', requestId: id, reviewAction: action })
+        .then(function() { showToast(action === 'approve' ? '已通过' : '已驳回'); loadRequests(); })
+        .catch(function(e) { showToast(e.message); });
+    }
+    function reviewClue(id, action) {
+      apiCall('admin', { action: 'reviewClue', id: id, reviewAction: action })
+        .then(function(res) {
+          if (res.needAddBlacklist && res.clueId) {
+            return apiCall('blacklist', { action: 'addBlacklistFromClue', clueId: res.clueId })
+              .then(function() { showToast('已通过并加入黑名单'); loadClues(); loadBlacklist(); });
+          }
+          showToast(res.message || '已通过');
+          loadClues();
+        })
+        .catch(function(e) { showToast(e.message); });
+    }
+    function setUserRole(id, role) {
+      apiCall('admin', { action: 'setUserRole', id: id, role: role })
+        .then(function() { showToast(role === 'admin' ? '已设为管理员' : '已设为普通用户'); loadUsers(); })
+        .catch(function(e) { showToast(e.message); });
+    }
+
+    function renderMain() {
+      var container = document.createElement('div');
+      container.className = 'container';
+      var header = document.createElement('div');
+      header.className = 'header';
+      var h1 = document.createElement('h1');
+      h1.textContent = '美丽人生 · 管理后台';
+      header.appendChild(h1);
+      var logout = document.createElement('span');
+      logout.className = 'logout';
+      logout.textContent = '退出';
+      logout.onclick = function() { clearToken(); location.reload(); };
+      header.appendChild(logout);
+      container.appendChild(header);
+
+      var tabsDiv = document.createElement('div');
+      tabsDiv.className = 'tabs';
+      ['users','clues','requests','blacklist'].forEach(function(t) {
+        var tabNames = { users: '用户列表', clues: '线索审核', requests: '身份变更', blacklist: '黑名单' };
+        var span = document.createElement('span');
+        span.className = 'tab' + (state.tab === t ? ' active' : '');
+        span.textContent = tabNames[t];
+        span.onclick = function() { state.tab = t; if (t === 'blacklist') loadBlacklist(); renderApp(); };
+        tabsDiv.appendChild(span);
+      });
+      container.appendChild(tabsDiv);
+
+      if (state.tab === 'users') {
+        var card1 = document.createElement('div');
+        card1.className = 'card';
+        var st = document.createElement('div');
+        st.className = 'section-title';
+        st.textContent = '筛选';
+        card1.appendChild(st);
+        var fl1 = document.createElement('div');
+        fl1.className = 'field-label';
+        fl1.textContent = '关键词（openid/昵称/手机）';
+        card1.appendChild(fl1);
+        var kwInput = document.createElement('input');
+        kwInput.placeholder = '可选';
+        kwInput.value = state.keyword;
+        kwInput.oninput = function() { state.keyword = kwInput.value; };
+        card1.appendChild(kwInput);
+        var fl2 = document.createElement('div');
+        fl2.className = 'field-label';
+        fl2.textContent = '身份';
+        card1.appendChild(fl2);
+        var sel = document.createElement('select');
+        sel.onchange = function() { state.identityFilter = sel.value; };
+        IDENTITY_OPTIONS.forEach(function(o) {
+          var opt = document.createElement('option');
+          opt.value = o.value;
+          opt.textContent = o.label;
+          if (o.value === state.identityFilter) opt.selected = true;
+          sel.appendChild(opt);
+        });
+        card1.appendChild(sel);
+        var btn = document.createElement('button');
+        btn.className = 'primary';
+        btn.textContent = state.loadingUsers ? '加载中…' : '查询';
+        btn.disabled = state.loadingUsers;
+        btn.onclick = loadUsers;
+        card1.appendChild(btn);
+        container.appendChild(card1);
+
+        var card2 = document.createElement('div');
+        card2.className = 'card';
+        var title2 = document.createElement('div');
+        title2.className = 'section-title';
+        title2.textContent = '用户（' + state.userList.length + '）';
+        card2.appendChild(title2);
+        if (state.userList.length === 0) {
+          var empty = document.createElement('div');
+          empty.className = 'empty';
+          empty.textContent = '暂无用户';
+          card2.appendChild(empty);
+        } else {
+          state.userList.forEach(function(item) {
+            var itemDiv = document.createElement('div');
+            itemDiv.className = 'item user-item';
+            var info = document.createElement('div');
+            info.className = 'info';
+            info.innerHTML = '<span class="item-row">' + (item.nickname || '未设置昵称') + '</span><span class="role-tag">' + (item.roleText || '普通用户') + '</span>' + (item.identityText ? ' <span class="item-meta">· ' + item.identityText + '</span>' : '');
+            itemDiv.appendChild(info);
+            var actions = document.createElement('div');
+            actions.className = 'item-actions';
+            if (item.role === 'normal') {
+              var btnAdmin = document.createElement('button');
+              btnAdmin.className = 'small primary';
+              btnAdmin.textContent = '设为管理员';
+              btnAdmin.onclick = function() { setUserRole(item.id, 'admin'); };
+              actions.appendChild(btnAdmin);
+            }
+            if (item.role === 'admin') {
+              var btnNormal = document.createElement('button');
+              btnNormal.className = 'small reject';
+              btnNormal.textContent = '取消管理员';
+              btnNormal.onclick = function() { setUserRole(item.id, 'normal'); };
+              actions.appendChild(btnNormal);
+            }
+            itemDiv.appendChild(actions);
+            card2.appendChild(itemDiv);
+          });
+        }
+        container.appendChild(card2);
+      } else if (state.tab === 'clues') {
+        var card = document.createElement('div');
+        card.className = 'card';
+        card.innerHTML = '<div class="section-title">待审核线索（' + state.clueList.length + '）</div>';
+        if (state.clueList.length === 0) {
+          var e = document.createElement('div');
+          e.className = 'empty';
+          e.textContent = '暂无待审核线索';
+          card.appendChild(e);
+        } else {
+          state.clueList.forEach(function(item) {
+            var itemDiv = document.createElement('div');
+            itemDiv.className = 'item';
+            itemDiv.innerHTML = '<div class="item-row">' + item.name + ' · ' + item.city + ' · ' + item.description + '</div><div class="item-meta">手机 ' + item.phone + ' · ' + item.createdAt + '</div><div class="item-actions"></div>';
+            var acts = itemDiv.querySelector('.item-actions');
+            var b1 = document.createElement('button');
+            b1.className = 'small approve';
+            b1.textContent = '通过';
+            b1.onclick = function() { reviewClue(item.id, 'approve'); };
+            var b2 = document.createElement('button');
+            b2.className = 'small reject';
+            b2.textContent = '驳回';
+            b2.onclick = function() { reviewClue(item.id, 'reject'); };
+            acts.appendChild(b1);
+            acts.appendChild(b2);
+            card.appendChild(itemDiv);
+          });
+        }
+        container.appendChild(card);
+      } else if (state.tab === 'requests') {
+        var cardR = document.createElement('div');
+        cardR.className = 'card';
+        cardR.innerHTML = '<div class="section-title">待审核身份变更（' + state.requestList.length + '）</div>';
+        if (state.requestList.length === 0) {
+          var e2 = document.createElement('div');
+          e2.className = 'empty';
+          e2.textContent = '暂无待审核';
+          cardR.appendChild(e2);
+        } else {
+          state.requestList.forEach(function(item) {
+            var itemDiv = document.createElement('div');
+            itemDiv.className = 'item';
+            itemDiv.innerHTML = '<div class="item-row">用户 #' + item.userId + ' · 当前 ' + item.userIdentityText + ' → 申请改为 ' + item.requestedIdentityText + '</div><div class="item-meta">' + item.createdAt + '</div><div class="item-actions"></div>';
+            var ar = itemDiv.querySelector('.item-actions');
+            var ba = document.createElement('button');
+            ba.className = 'small approve';
+            ba.textContent = '通过';
+            ba.onclick = function() { reviewRequest(item.id, 'approve'); };
+            var br = document.createElement('button');
+            br.className = 'small reject';
+            br.textContent = '驳回';
+            br.onclick = function() { reviewRequest(item.id, 'reject'); };
+            ar.appendChild(ba);
+            ar.appendChild(br);
+            cardR.appendChild(itemDiv);
+          });
+        }
+        container.appendChild(cardR);
+      } else {
+        var cardB = document.createElement('div');
+        cardB.className = 'card';
+        cardB.innerHTML = '<div class="section-title">黑名单记录（' + state.blacklistList.length + '）</div>';
+        if (state.blacklistList.length === 0) {
+          var e3 = document.createElement('div');
+          e3.className = 'empty';
+          e3.textContent = '暂无黑名单记录';
+          cardB.appendChild(e3);
+        } else {
+          state.blacklistList.forEach(function(item) {
+            var itemDiv = document.createElement('div');
+            itemDiv.className = 'item';
+            itemDiv.innerHTML = '<div class="item-row">' + item.name + ' · ' + item.city + ' · ' + item.statusText + '</div><div class="item-meta">手机 ' + item.phone + ' · 身份证 ' + item.idCard + ' · ' + item.eventType + ' · ' + item.createdAt + '</div>' + (item.description ? '<div class="item-meta">' + item.description + '</div>' : '');
+            cardB.appendChild(itemDiv);
+          });
+        }
+        container.appendChild(cardB);
+      }
+
+      if (state.toast) {
+        var toastDiv = document.createElement('div');
+        toastDiv.className = 'msg ok';
+        toastDiv.style.cssText = 'position:fixed;bottom:24px;left:24px;right:24px;';
+        toastDiv.textContent = state.toast;
+        container.appendChild(toastDiv);
+      }
+      return container;
+    }
+
+    function renderApp() {
+      var app = document.getElementById('app');
+      app.innerHTML = '';
+      if (getToken()) {
+        app.appendChild(renderMain());
+      } else {
+        app.appendChild(renderLogin());
+      }
+    }
+
+    if (getToken()) {
+      loadUsers();
+      loadRequests();
+      loadClues();
+      loadBlacklist();
+    } else {
+      fetchTicket();
+    }
+    renderApp();
+  </script>
+</body>
+</html>

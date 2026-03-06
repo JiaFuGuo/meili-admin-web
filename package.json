@@ -1,0 +1,7 @@
+{
+  "name": "meili-admin-web",
+  "version": "1.0.0",
+  "description": "美丽人生管理后台（网页版）BFF + 前端",
+  "private": true,
+  "type": "module"
+}
