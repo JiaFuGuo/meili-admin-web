@@ -2,7 +2,7 @@ const env = (process.env.WX_CLOUD_ENV || '').trim();
 let cached = { token: '', expires: 0 };
 
 /** 使用稳定版接口获取 access_token（推荐，避免 invalid credential） */
-export async function getAccessToken() {
+export async function getAccessToken(forceRefresh = false) {
   const appid = (process.env.WX_APPID || '').trim();
   const secret = (process.env.WX_SECRET || '').trim();
   if (!appid || !secret) throw new Error('未配置 WX_APPID / WX_SECRET');
@@ -12,7 +12,8 @@ export async function getAccessToken() {
     body: JSON.stringify({
       grant_type: 'client_credential',
       appid,
-      secret
+      secret,
+      force_refresh: !!forceRefresh
     })
   });
   const data = await res.json();
@@ -20,10 +21,14 @@ export async function getAccessToken() {
   throw new Error(data.errmsg || '获取 access_token 失败');
 }
 
-export async function getCachedAccessToken() {
-  if (cached.token && cached.expires > Date.now()) return cached.token;
-  const token = await getAccessToken();
-  cached = { token, expires: Date.now() + 7000 * 1000 };
+export function clearAccessTokenCache() {
+  cached = { token: '', expires: 0 };
+}
+
+export async function getCachedAccessToken(forceRefresh = false) {
+  if (!forceRefresh && cached.token && cached.expires > Date.now()) return cached.token;
+  const token = await getAccessToken(forceRefresh);
+  cached = { token, expires: Date.now() + 6000 * 1000 };
   return token;
 }
 
