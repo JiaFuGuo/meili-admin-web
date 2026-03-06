@@ -1,8 +1,9 @@
 /**
  * 根据 ticket 生成小程序码图片，用于网页展示「微信扫码登录」。
  * GET /api/login-qrcode?ticket=xxx
+ * 注意：WX_APPID / WX_SECRET 必须是「小程序」的，不能是公众号的。
  */
-import { getCachedAccessToken, clearAccessTokenCache } from './_cloud.mjs';
+import { getAccessToken, getCachedAccessToken, clearAccessTokenCache } from './_cloud.mjs';
 
 function isTokenError(err) {
   if (!err || typeof err !== 'object') return false;
@@ -38,7 +39,8 @@ export default async function handler(req, res) {
     return;
   }
   try {
-    let accessToken = await getCachedAccessToken();
+    // 生成小程序码时每次直接拉取新 token，不用缓存，避免多实例下「不是最新」报错
+    let accessToken = await getAccessToken();
     let wxRes = await requestWxacode(accessToken, ticket);
     const contentType = wxRes.headers.get('content-type') || '';
 
